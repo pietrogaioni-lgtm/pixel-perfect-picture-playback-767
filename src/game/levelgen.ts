@@ -1,7 +1,6 @@
 import {
   BOUNCE_VELOCITY,
   GEN_GAP_SAFETY,
-  GRAVITY,
   MAX_FALL_SPEED,
   PLAYER_H,
   PX_PER_METER,
@@ -64,7 +63,7 @@ class Generator {
   private nextId = 1;
   private cur!: Platform;
   private cursor = 0;
-  readonly finishX: number;
+  finishX: number;
   private hintSeen = new Set<string>();
   private reachCache = new Map<string, number>();
   private world: WorldDef;
@@ -573,7 +572,8 @@ class Generator {
       if (token.startsWith("pw:")) powerCount++;
       this.run(token);
     }
-    // Finish runway (no obstacles near the line).
+    // The finish line must sit on solid ground with a clear runway.
+    if (this.cur.x > this.finishX - 300) this.finishX = this.cur.x + 400;
     this.extendTo(this.finishX + 1800);
 
     this.placeStar();
@@ -647,8 +647,4 @@ class Generator {
 
 export function generateLevel(def: LevelDef): LevelLayout {
   return new Generator(def, new Rng(def.seed)).build();
-}
-
-export function gravityCheck(): number {
-  return GRAVITY;
 }
