@@ -1,10 +1,11 @@
-export const enum Shape {
-  Circle = 0,
-  Rect = 1,
-  Star = 2,
-  Ring = 3,
-  Line = 4,
-}
+export const Shape = {
+  Circle: 0,
+  Rect: 1,
+  Star: 2,
+  Ring: 3,
+  Line: 4,
+} as const;
+export type Shape = (typeof Shape)[keyof typeof Shape];
 
 export interface Particle {
   active: boolean;
