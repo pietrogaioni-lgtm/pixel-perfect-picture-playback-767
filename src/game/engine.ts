@@ -116,6 +116,8 @@ export interface Player {
   trail: { x: number; y: number }[];
 }
 
+const MAX_HOLD_BOUNCE = 1; // bounces don't get the low "held" gravity
+
 const SOLID_PLATFORM = (p: Platform) => p.kind === "building" || p.kind === "float";
 
 function makePlayer(x: number, feet: number): Player {
@@ -426,7 +428,7 @@ export class Run {
     if (!p.grounded) p.airTime += dt;
 
     // Carry the cat along with moving / falling planks.
-    if (p.grounded && p.ground && "kind" in p.ground && (p.ground.kind === "moving" || p.ground.kind === "crumble")) {
+    if (p.grounded && p.ground && "crumbleState" in p.ground && (p.ground.kind === "moving" || p.ground.kind === "crumble")) {
       const g = p.ground as Platform;
       if (!g.dead) p.y += g.y - g.prevY;
     }
@@ -556,7 +558,7 @@ export class Run {
     p.jumpsUsed = 1;
     p.holdTime = 0;
     p.airTime = 0;
-    p.takeoffId = p.ground && "kind" in p.ground ? p.ground.id : -1;
+    p.takeoffId = p.ground ? p.ground.id : -1;
     p.ground = null;
     p.squashX = 0.78;
     p.squashY = 1.28;
@@ -711,7 +713,7 @@ export class Run {
       const OL = this.layout.obstacles;
       for (let i = this.obsStart; i < OL.length; i++) {
         const o = OL[i] as Obstacle;
-        if (o.x > maxX) break;
+        if (o.baseX > maxX + 400) break;
         if (!o.solid || o.dead || o.x + o.w < minX) continue;
         const h = sweepAABB(box, rx, ry, o);
         if (h && h.t < bestT) {
@@ -794,6 +796,7 @@ export class Run {
       }
     }
     if (p.grounded) p.lastFeet = p.y + p.h;
+    else if (wasGrounded && prevGround) p.takeoffId = prevGround.id; // walked off an edge
   }
 
   private land(s: Platform | Obstacle, wasGrounded: boolean, prevGround: Platform | Obstacle | null) {
@@ -961,7 +964,7 @@ export class Run {
     const OL = this.layout.obstacles;
     for (let i = this.obsStart; i < OL.length; i++) {
       const o = OL[i] as Obstacle;
-      if (o.x > p.x + 700) break;
+      if (o.baseX > p.x + 1000) break;
       if (o.dead) continue;
       if (o.zone) {
         if (!overlaps(box, o)) continue;
@@ -1251,6 +1254,7 @@ export class Run {
     this.state = "complete";
     this.stateTimer = 0;
     const p = this.player;
+    p.invuln = 99;
     for (let i = 0; i < (this.lowQuality ? 60 : 150); i++) {
       this.particles.spawn({
         x: p.x + (Math.random() - 0.2) * VIEW_W * 0.8,
@@ -1405,5 +1409,3 @@ export class Run {
     }
   }
 }
-
-const MAX_HOLD_BOUNCE = 1; // bounces don't get the low "held" gravity

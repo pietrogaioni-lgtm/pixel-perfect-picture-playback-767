@@ -12,6 +12,8 @@ import {
 } from "./constants";
 import type { Box } from "./types";
 
+const EPS = 1e-4;
+
 export interface SweepHit {
   t: number;
   nx: number;
@@ -34,8 +36,9 @@ export function sweepAABB(a: Box, dx: number, dy: number, b: Box): SweepHit | nu
     xEntry = -Infinity;
     xExit = Infinity;
   } else {
-    const invEntry = dx > 0 ? b.x - (a.x + a.w) : b.x + b.w - a.x;
+    let invEntry = dx > 0 ? b.x - (a.x + a.w) : b.x + b.w - a.x;
     const invExit = dx > 0 ? b.x + b.w - a.x : b.x - (a.x + a.w);
+    if (Math.abs(invEntry) < EPS) invEntry = 0; // treat touching as contact, not overlap
     xEntry = invEntry / dx;
     xExit = invExit / dx;
   }
@@ -44,8 +47,9 @@ export function sweepAABB(a: Box, dx: number, dy: number, b: Box): SweepHit | nu
     yEntry = -Infinity;
     yExit = Infinity;
   } else {
-    const invEntry = dy > 0 ? b.y - (a.y + a.h) : b.y + b.h - a.y;
+    let invEntry = dy > 0 ? b.y - (a.y + a.h) : b.y + b.h - a.y;
     const invExit = dy > 0 ? b.y + b.h - a.y : b.y - (a.y + a.h);
+    if (Math.abs(invEntry) < EPS) invEntry = 0;
     yEntry = invEntry / dy;
     yExit = invExit / dy;
   }
