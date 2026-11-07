@@ -88,6 +88,7 @@ interface ReachOpts {
   double: boolean;
   jumpMult?: number;
   bounce?: boolean;
+  held?: boolean;
 }
 
 /**
@@ -98,6 +99,7 @@ interface ReachOpts {
 export function maxJumpReach(speed: number, dy: number, opts: ReachOpts): number {
   const mult = opts.jumpMult ?? 1;
   const v0 = opts.bounce ? BOUNCE_VELOCITY : JUMP_VELOCITY * mult;
+  const held = opts.held ?? true;
   let best = 0;
   const tries = opts.double ? 70 : 1;
   for (let k = 0; k < tries; k++) {
@@ -112,7 +114,7 @@ export function maxJumpReach(speed: number, dy: number, opts: ReachOpts): number
         vy = -DOUBLE_JUMP_VELOCITY * mult;
         hold = 0;
       }
-      vy = Math.min(vy + gravityFor(vy, true, hold) * STEP, MAX_FALL_SPEED);
+      vy = Math.min(vy + gravityFor(vy, held, hold) * STEP, MAX_FALL_SPEED);
       hold += STEP;
       const ny = y + vy * STEP;
       x += speed * STEP;

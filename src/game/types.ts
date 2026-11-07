@@ -94,6 +94,7 @@ export interface Hint {
   touchText: string;
   action: HintAction;
   slowmo: boolean;
+  slowFrom: number;
   shown: boolean;
   done: boolean;
 }
