@@ -40,6 +40,12 @@ it("bot", () => {
     const r = new Run(def);
     let n = 0;
     while ((r.state === "playing" || r.state === "complete") && n < 60 * 240) { r.update(STEP, bot(r)); n++; }
+    if (r.state === "dying" || r.state === "dead") {
+      const p = r.player;
+      const near = r.layout.obstacles.filter(o => Math.abs(o.x - p.x) < 250).map(o => `${o.kind}@${Math.floor(o.x - p.x)},${Math.floor(o.y)} h${Math.floor(o.h)} dead${o.dead}`);
+      const pl = r.layout.platforms.filter(q => q.x + q.w > p.x - 500 && q.x < p.x + 500).map(q => `${q.kind}[${Math.floor(q.x - p.x)}..${Math.floor(q.x + q.w - p.x)}] y${Math.floor(q.y)}${q.wall ? " WALL" : ""}`);
+      console.log("  ", def.id, "py", Math.floor(p.y + p.h), "vy", Math.floor(p.vy), "near", near.join(" | "), "plats", pl.join(" "));
+    }
     console.log(def.id, r.state, "dist", Math.floor(r.distance), "/", def.distance, r.deathCause ?? "", "x", Math.floor(r.player.x), "fish", r.fishCount, "/", r.layout.totalFish);
   }
 });
