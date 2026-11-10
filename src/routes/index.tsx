@@ -1,23 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { WhiskerGame } from "@/components/game/WhiskerGame";
 
-// The home route ships no og:image, so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
-  component: Index,
+  // The game draws on a canvas and uses Web Audio: render it only in the browser.
+  ssr: false,
+  head: () => ({
+    meta: [
+      { title: "Whisker Rooftops — Cat Parkour Runner" },
+      {
+        name: "description",
+        content: "Leap, slide and wall-run a cat across 30 rooftop levels in six worlds. Collect fish, find hidden stars and unlock 12 cats.",
+      },
+      { property: "og:title", content: "Whisker Rooftops — Cat Parkour Runner" },
+      {
+        property: "og:description",
+        content: "A charming 2.5D rooftop parkour runner: 30 handcrafted levels, power-ups, combos and collectible cats.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+  component: WhiskerGame,
 });
-
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
-function Index() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
-}

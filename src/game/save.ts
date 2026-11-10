@@ -69,7 +69,8 @@ export function sanitizeSave(raw: unknown): SaveData {
   if (!isObj(raw)) return d;
   const out = defaultSave();
   out.fish = Math.floor(num(raw["fish"], d.fish));
-  out.unlocked = Math.floor(num(raw["unlocked"], 1, 1, 30));
+  const un = raw["unlocked"];
+  out.unlocked = typeof un === "number" && Number.isInteger(un) && un >= 1 && un <= 30 ? un : 1;
   if (isObj(raw["levels"])) {
     for (const [k, v] of Object.entries(raw["levels"])) {
       const id = Number(k);
