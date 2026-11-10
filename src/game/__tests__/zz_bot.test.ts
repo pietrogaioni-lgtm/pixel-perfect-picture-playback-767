@@ -36,10 +36,11 @@ function bot(r: Run) {
 }
 
 it("bot", () => {
-  for (const def of LEVELS.filter(d => d.id === 27)) {
+  for (const def of LEVELS.filter(d => [25, 28, 29].includes(d.id))) {
     const r = new Run(def);
-    let n = 0;
-    while ((r.state === "playing" || r.state === "complete") && n < 60 * 240) { const inp = bot(r); r.update(STEP, inp); n++; const p = r.player; if (p.x > 1300 && p.x < 2000 && n % 2 === 0) console.log("T", n, Math.floor(p.x), Math.floor(p.y + p.h), Math.floor(p.vx), Math.floor(p.vy), "g", p.grounded, "j", inp.jumpPressed?1:0, inp.jumpHeld?1:0, "used", p.jumpsUsed, "wall", p.wallContact, p.wallRun); }
+    let n = 0; const hist: string[] = [];
+    while ((r.state === "playing" || r.state === "complete") && n < 60 * 240) { const inp = bot(r); r.update(STEP, inp); n++; const p = r.player; const gk = p.ground && "crumbleState" in p.ground ? (p.ground as any).kind : (p.ground ? "obs" : "-"); hist.push(`T${n} x${Math.floor(p.x)} f${Math.floor(p.y + p.h)} vy${Math.floor(p.vy)} g${p.grounded?1:0}/${gk} j${inp.jumpPressed?1:0}${inp.jumpHeld?1:0} u${p.jumpsUsed}`); if (hist.length > 50) hist.shift(); }
+    if (r.state === "dying") console.log("HIST", def.id, hist.filter((_, i) => i % 2 === 0).join("\n"));
     if (r.state === "dying" || r.state === "dead") {
       const p = r.player;
       const near = r.layout.obstacles.filter(o => Math.abs(o.x - p.x) < 250).map(o => `${o.kind}@${Math.floor(o.x - p.x)},${Math.floor(o.y)} h${Math.floor(o.h)} dead${o.dead}`);
