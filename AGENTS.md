@@ -28,3 +28,8 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+
+- Standalone HTML5 build lives in `html5/` (entry + bundled fonts) and `vite.html5.config.ts`; `bun run build:html5` outputs `dist-html5/` with relative paths. Why: CrazyGames needs a static ZIP with `index.html` at its root and no server or external requests, while the Lovable preview keeps TanStack Start.
+- The HTML5 entry mounts `WhiskerGame` directly; keep game code free of router/server imports. Why: the static build has no TanStack router or server functions.
