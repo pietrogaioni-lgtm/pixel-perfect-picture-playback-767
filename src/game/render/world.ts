@@ -7,48 +7,169 @@ import { drawFish, starPath } from "./cat";
 
 const patternCache = new WeakMap<CanvasRenderingContext2D, Map<string, CanvasPattern>>();
 
-function windowPattern(ctx: CanvasRenderingContext2D, w: WorldDef, style: number): CanvasPattern | null {
+/** Patterns are painted at 2x and scaled down so facades stay crisp on high-DPI and fullscreen. */
+const PAT_RES = 2;
+
+function scaledPattern(ctx: CanvasRenderingContext2D, c: HTMLCanvasElement): CanvasPattern | null {
+  const p = ctx.createPattern(c, "repeat");
+  if (p && typeof DOMMatrix !== "undefined") p.setTransform(new DOMMatrix().scaleSelf(1 / PAT_RES, 1 / PAT_RES));
+  return p;
+}
+
+function cachePattern(ctx: CanvasRenderingContext2D, key: string, w: number, h: number, paint: (g: CanvasRenderingContext2D) => void) {
   let m = patternCache.get(ctx);
   if (!m) {
     m = new Map();
     patternCache.set(ctx, m);
   }
-  const key = `${w.id}:${style}`;
   const hit = m.get(key);
   if (hit) return hit;
   const c = document.createElement("canvas");
-  c.width = 128;
-  c.height = 140;
+  c.width = w * PAT_RES;
+  c.height = h * PAT_RES;
   const g = c.getContext("2d");
   if (!g) return null;
-  for (let i = 0; i < 4; i++) {
-    const x = (i % 2) * 64 + 18;
-    const y = Math.floor(i / 2) * 70 + 16;
-    const lit = hash01(i * 3 + style * 7 + w.id) > (w.weather === "neon" || w.weather === "snow" ? 0.35 : 0.6);
-    g.fillStyle = "rgba(0,0,0,0.18)";
-    g.fillRect(x - 3, y - 3, 30, 40);
-    g.fillStyle = lit ? w.windowOn : w.windowOff;
-    if (w.weather === "sand") {
-      g.beginPath();
-      g.roundRect(x, y, 24, 34, [12, 12, 0, 0]);
-      g.fill();
-    } else g.fillRect(x, y, 24, 34);
-    g.fillStyle = w.trim;
-    g.globalAlpha = 0.85;
-    if (w.weather !== "sand" && w.weather !== "neon") {
-      g.fillRect(x + 11, y, 2, 34);
-      g.fillRect(x, y + 16, 24, 2);
-      g.fillRect(x - 4, y + 34, 32, 4);
-    }
-    g.globalAlpha = 1;
-    if (lit) {
-      g.fillStyle = "rgba(255,255,255,0.25)";
-      g.fillRect(x + 2, y + 2, 8, 12);
-    }
-  }
-  const p = ctx.createPattern(c, "repeat");
+  g.scale(PAT_RES, PAT_RES);
+  paint(g);
+  const p = scaledPattern(ctx, c);
   if (p) m.set(key, p);
   return p;
+}
+
+function windowPattern(ctx: CanvasRenderingContext2D, w: WorldDef, style: number): CanvasPattern | null {
+  return cachePattern(ctx, `win:${w.id}:${style}`, 128, 140, (g) => {
+    const night = w.weather === "neon" || w.weather === "snow";
+    for (let i = 0; i < 4; i++) {
+      const x = (i % 2) * 64 + 18;
+      const y = Math.floor(i / 2) * 70 + 16;
+      const lit = hash01(i * 3 + style * 7 + w.id) > (night ? 0.35 : 0.6);
+      const arch = w.weather === "sand";
+      const shape = (dx: number, dy: number, ww: number, hh: number) => {
+        g.beginPath();
+        if (arch) g.roundRect(dx, dy, ww, hh, [ww / 2, ww / 2, 0, 0]);
+        else g.rect(dx, dy, ww, hh);
+      };
+      // recess shadow + frame
+      g.fillStyle = "rgba(0,0,0,0.22)";
+      shape(x - 4, y - 4, 32, 42);
+      g.fill();
+      g.fillStyle = w.trim;
+      g.globalAlpha = 0.9;
+      shape(x - 2, y - 2, 28, 38);
+      g.fill();
+      g.globalAlpha = 1;
+      // glass with a soft vertical gradient
+      const glass = g.createLinearGradient(0, y, 0, y + 34);
+      if (lit) {
+        glass.addColorStop(0, w.windowOn);
+        glass.addColorStop(1, night ? "rgba(255,170,90,0.95)" : w.windowOn);
+      } else {
+        glass.addColorStop(0, w.windowOff);
+        glass.addColorStop(1, "rgba(20,25,50,0.9)");
+      }
+      g.fillStyle = glass;
+      shape(x, y, 24, 34);
+      g.fill();
+      g.save();
+      shape(x, y, 24, 34);
+      g.clip();
+      // inner top shadow
+      g.fillStyle = "rgba(0,0,0,0.22)";
+      g.fillRect(x, y, 24, 4);
+      if (lit) {
+        // curtains and a warm glow
+        g.fillStyle = "rgba(255,255,255,0.18)";
+        g.fillRect(x, y + 4, 6, 30);
+        g.fillRect(x + 18, y + 4, 6, 30);
+      } else {
+        // sky reflection streak
+        g.fillStyle = "rgba(255,255,255,0.22)";
+        g.beginPath();
+        g.moveTo(x + 4, y + 34);
+        g.lineTo(x + 14, y);
+        g.lineTo(x + 20, y);
+        g.lineTo(x + 10, y + 34);
+        g.closePath();
+        g.fill();
+      }
+      g.restore();
+      // mullions
+      if (!arch && w.weather !== "neon") {
+        g.fillStyle = w.trim;
+        g.fillRect(x + 11, y, 2, 34);
+        g.fillRect(x, y + 16, 24, 2);
+      }
+      // sill with shadow
+      g.fillStyle = w.trim;
+      g.fillRect(x - 5, y + 34, 34, 4);
+      g.fillStyle = "rgba(255,255,255,0.35)";
+      g.fillRect(x - 5, y + 34, 34, 1);
+      g.fillStyle = "rgba(0,0,0,0.18)";
+      g.fillRect(x - 3, y + 38, 30, 3);
+      // flower box on some sunny windows
+      if (w.weather === "sun" && hash01(i * 5 + style * 3) > 0.6) {
+        g.fillStyle = "#8a5a3c";
+        g.fillRect(x - 2, y + 30, 28, 7);
+        const cols = ["#ff6b8a", "#ffd166", "#ff8fab"];
+        for (let k = 0; k < 5; k++) {
+          g.fillStyle = "#4caf6a";
+          g.beginPath();
+          g.arc(x + 1 + k * 5.5, y + 29, 3.2, 0, Math.PI * 2);
+          g.fill();
+          g.fillStyle = cols[k % 3] as string;
+          g.beginPath();
+          g.arc(x + 1 + k * 5.5, y + 27, 1.8, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+    }
+  });
+}
+
+/** Subtle surface texture per world (bricks, panels, stucco, planks). */
+function wallTexture(ctx: CanvasRenderingContext2D, w: WorldDef): CanvasPattern | null {
+  return cachePattern(ctx, `tex:${w.id}`, 64, 32, (g) => {
+    switch (w.weather) {
+      case "sun":
+      case "rain":
+        g.fillStyle = "rgba(0,0,0,0.06)";
+        g.fillRect(0, 15, 64, 1);
+        g.fillRect(0, 31, 64, 1);
+        g.fillRect(15, 0, 1, 15);
+        g.fillRect(47, 0, 1, 15);
+        g.fillRect(31, 16, 1, 15);
+        g.fillRect(63, 16, 1, 15);
+        g.fillStyle = "rgba(255,255,255,0.04)";
+        g.fillRect(0, 16, 64, 1);
+        g.fillRect(0, 0, 64, 1);
+        break;
+      case "neon":
+        g.fillStyle = "rgba(255,255,255,0.035)";
+        g.fillRect(0, 0, 64, 1);
+        g.fillRect(0, 0, 1, 32);
+        g.fillStyle = "rgba(0,0,0,0.08)";
+        g.fillRect(0, 31, 64, 1);
+        break;
+      case "snow":
+        g.fillStyle = "rgba(0,0,0,0.05)";
+        g.fillRect(0, 7, 64, 1);
+        g.fillRect(0, 15, 64, 1);
+        g.fillRect(0, 23, 64, 1);
+        g.fillRect(0, 31, 64, 1);
+        break;
+      case "sand":
+        for (let k = 0; k < 26; k++) {
+          g.fillStyle = hash01(k * 3.1) > 0.5 ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.06)";
+          g.fillRect(hash01(k * 1.7) * 64, hash01(k * 2.9) * 32, 2, 2);
+        }
+        break;
+      case "sky":
+        g.fillStyle = "rgba(0,0,0,0.035)";
+        g.fillRect(0, 31, 64, 1);
+        g.fillRect(31, 0, 1, 32);
+        break;
+    }
+  });
 }
 
 export function drawPlatforms(ctx: CanvasRenderingContext2D, run: Run, camX: number, camY: number, alpha: number, high: boolean) {
@@ -68,12 +189,28 @@ export function drawPlatforms(ctx: CanvasRenderingContext2D, run: Run, camX: num
   }
 }
 
-function drawBuilding(ctx: CanvasRenderingContext2D, b: Platform, top: number, bottom: number, w: WorldDef, t: number, high: boolean) {
+export function drawBuilding(ctx: CanvasRenderingContext2D, b: Platform, top: number, bottom: number, w: WorldDef, t: number, high: boolean) {
   const x = b.x;
   const h = Math.max(0, bottom - top);
   const body = w.bodies[b.style % w.bodies.length] ?? w.bodyDark;
   ctx.fillStyle = body;
   ctx.fillRect(x, top, b.w, h);
+  if (high) {
+    const tex = wallTexture(ctx, w);
+    if (tex) {
+      ctx.save();
+      ctx.translate(x, top);
+      ctx.fillStyle = tex;
+      ctx.fillRect(0, 0, b.w, h);
+      ctx.restore();
+    }
+  }
+  // sunlit top of the facade
+  const lit = ctx.createLinearGradient(0, top, 0, top + 260);
+  lit.addColorStop(0, "rgba(255,255,255,0.12)");
+  lit.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = lit;
+  ctx.fillRect(x, top, b.w, Math.min(h, 260));
   // windows
   const pat = windowPattern(ctx, w, b.style);
   if (pat && b.w > 60) {
@@ -104,6 +241,35 @@ function drawBuilding(ctx: CanvasRenderingContext2D, b: Platform, top: number, b
   ctx.fillStyle = gd;
   ctx.fillRect(x, top + 120, b.w, Math.max(0, h - 120));
 
+  // floor string-courses between window rows
+  if (b.w > 60 && w.weather !== "neon") {
+    for (let fy = top + 24 + 140 - 8; fy < bottom; fy += 140) {
+      ctx.fillStyle = w.trim;
+      ctx.globalAlpha = 0.55;
+      ctx.fillRect(x, fy, b.w, 5);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "rgba(0,0,0,0.12)";
+      ctx.fillRect(x, fy + 5, b.w, 4);
+    }
+  }
+  // drainpipe on wider buildings
+  if (b.w > 220 && !b.wall) {
+    // sit the pipe in the gap between window columns
+    const ox = x + ((b.w - 28) % 64) / 2;
+    const k = Math.floor((x + b.w - 14 - 4 - (ox + 58)) / 64);
+    const px = ox + 58 + k * 64;
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    ctx.fillRect(px + 3, top + 18, 8, h);
+    ctx.fillStyle = w.weather === "neon" ? "#2a2348" : "#8d8f9e";
+    ctx.fillRect(px, top + 16, 8, h);
+    ctx.fillStyle = "rgba(255,255,255,0.3)";
+    ctx.fillRect(px + 1, top + 16, 2, h);
+    for (let yy = top + 60; yy < bottom; yy += 90) {
+      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      ctx.fillRect(px - 2, yy, 12, 4);
+    }
+  }
+
   // wall-run wall marking
   if (b.wall) {
     ctx.fillStyle = w.accent;
@@ -122,15 +288,39 @@ function drawBuilding(ctx: CanvasRenderingContext2D, b: Platform, top: number, b
     ctx.globalAlpha = 1;
   }
 
-  // Roof surface (2.5D band) + parapet
+  // Roof surface (2.5D band) + parapet + cornice
+  // soft contact shadow cast by the cornice onto the facade
+  const cs = ctx.createLinearGradient(0, top + 12, 0, top + 34);
+  cs.addColorStop(0, "rgba(0,0,0,0.28)");
+  cs.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = cs;
+  ctx.fillRect(x, top + 12, b.w, 22);
   ctx.fillStyle = w.roof;
   ctx.fillRect(x - 4, top - 8, b.w + 8, 14);
-  ctx.fillStyle = "rgba(255,255,255,0.22)";
-  ctx.fillRect(x - 4, top - 8, b.w + 8, 3);
+  const rg = ctx.createLinearGradient(0, top - 8, 0, top + 6);
+  rg.addColorStop(0, "rgba(255,255,255,0.32)");
+  rg.addColorStop(0.3, "rgba(255,255,255,0.08)");
+  rg.addColorStop(1, "rgba(0,0,0,0.12)");
+  ctx.fillStyle = rg;
+  ctx.fillRect(x - 4, top - 8, b.w + 8, 14);
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.fillRect(x - 4, top - 8, b.w + 8, 1.5);
   ctx.fillStyle = w.trim;
   ctx.fillRect(x - 6, top + 6, b.w + 12, 6);
+  ctx.fillStyle = "rgba(255,255,255,0.25)";
+  ctx.fillRect(x - 6, top + 6, b.w + 12, 1.5);
+  // dentils under the cornice
+  if (w.weather === "sun" || w.weather === "rain" || w.weather === "snow" || w.weather === "sky") {
+    ctx.fillStyle = w.trim;
+    ctx.globalAlpha = 0.8;
+    for (let k = 4; k < b.w - 6; k += 14) ctx.fillRect(x + k, top + 12, 7, 5);
+    ctx.globalAlpha = 1;
+  }
   ctx.fillStyle = "rgba(0,0,0,0.18)";
-  ctx.fillRect(x - 6, top + 12, b.w + 12, 4);
+  ctx.fillRect(x - 6, top + 12, b.w + 12, 2);
+  // end caps
+  ctx.fillStyle = "rgba(0,0,0,0.2)";
+  ctx.fillRect(x + b.w + 4, top - 8, 2, 20);
 
   switch (w.weather) {
     case "snow": {
