@@ -3,10 +3,11 @@ import type { Run } from "../engine";
 import { Shape } from "../particles";
 import { hash01 } from "../rng";
 import { WORLDS, type WorldDef } from "../worlds";
-import { drawBackground, drawWeatherFront } from "./background";
+import { drawBackground, drawWeatherFront, setBackgroundResolution } from "./background";
 import { drawCat, starPath, type CatPose } from "./cat";
 import { drawHud, FONT } from "./hud";
-import { drawCollectibles, drawFinish, drawObstacles, drawPlatforms, drawVacuum } from "./world";
+import { drawBuilding, drawCollectibles, drawFinish, drawObstacles, drawPlatforms, drawVacuum } from "./world";
+import type { Platform } from "../types";
 
 export interface Look {
   skin: string;
@@ -48,6 +49,7 @@ export class Renderer {
       this.canvas.height = h;
     }
     this.scale = cssW / VIEW_W;
+    setBackgroundResolution(high ? this.dpr * this.scale : 1);
     this.vignettes.clear();
     this.key = `${w}x${h}`;
   }
@@ -303,20 +305,13 @@ export class Renderer {
     const camX = t * 260;
     drawBackground(ctx, w, camX, 45, t, high, this.key);
     const top = 560;
-    // simple rooftops
+    // same rooftops as in the levels, scrolling endlessly
     const seg = 520;
     const start = Math.floor(camX / seg) - 1;
     for (let i = start; i < start + 5; i++) {
-      const x = i * seg - camX;
-      const body = w.bodies[((i % 4) + 4) % 4] ?? w.bodyDark;
-      ctx.fillStyle = body;
-      ctx.fillRect(x, top, seg - 30, VIEW_H - top);
-      ctx.fillStyle = "rgba(0,0,0,0.12)";
-      for (let k = 30; k < seg - 60; k += 64) ctx.fillRect(x + k, top + 46, 26, 34);
-      ctx.fillStyle = w.roof;
-      ctx.fillRect(x - 4, top - 8, seg - 22, 14);
-      ctx.fillStyle = w.trim;
-      ctx.fillRect(x - 6, top + 6, seg - 18, 6);
+      const p = attractRoof(i, seg);
+      p.x = i * seg - camX;
+      drawBuilding(ctx, p, top, VIEW_H + 40, w, t, high);
     }
     // the cat hops across the seams
     const local = (camX + 360) % seg;
@@ -348,6 +343,36 @@ export class Renderer {
     ctx.fillStyle = "rgba(20,14,40,0.25)";
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
   }
+}
+
+const attractRoofs = new Map<number, Platform>();
+function attractRoof(i: number, seg: number): Platform {
+  let p = attractRoofs.get(i);
+  if (!p) {
+    if (attractRoofs.size > 16) attractRoofs.clear();
+    p = {
+      id: i,
+      kind: "building",
+      x: 0,
+      y: 0,
+      w: seg - 30,
+      h: 400,
+      baseY: 0,
+      prevY: 0,
+      surface: "normal",
+      style: ((i % 4) + 4) % 4,
+      moveRange: 0,
+      moveSpeed: 0,
+      movePhase: 0,
+      crumbleState: 0,
+      crumbleTimer: 0,
+      vy: 0,
+      wall: false,
+      dead: false,
+    };
+    attractRoofs.set(i, p);
+  }
+  return p;
 }
 
 /** Laundry poles and sign chains sit behind the buildings' parapets — nothing extra for now. */

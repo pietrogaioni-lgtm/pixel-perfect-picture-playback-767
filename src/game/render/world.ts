@@ -254,7 +254,10 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Platform, top: nu
   }
   // drainpipe on wider buildings
   if (b.w > 220 && !b.wall) {
-    const px = x + b.w - 20;
+    // sit the pipe in the gap between window columns
+    const ox = x + ((b.w - 28) % 64) / 2;
+    const k = Math.floor((x + b.w - 14 - 4 - (ox + 58)) / 64);
+    const px = ox + 58 + k * 64;
     ctx.fillStyle = "rgba(0,0,0,0.18)";
     ctx.fillRect(px + 3, top + 18, 8, h);
     ctx.fillStyle = w.weather === "neon" ? "#2a2348" : "#8d8f9e";
