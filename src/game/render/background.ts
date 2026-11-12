@@ -11,13 +11,36 @@ interface Layers {
   near: HTMLCanvasElement;
 }
 
-const cache = new Map<number, Layers>();
+const cache = new Map<string, Layers>();
+
+/** Pixel density the cached layers/clouds are painted at (set from the renderer's output scale). */
+let RES = 1;
+export function setBackgroundResolution(r: number) {
+  const next = Math.max(1, Math.min(2, Math.round(r * 4) / 4));
+  if (next !== RES) {
+    RES = next;
+    cache.clear();
+    cloudCache.clear();
+  }
+}
 
 function makeCanvas(w: number, h: number) {
   const c = document.createElement("canvas");
-  c.width = w;
-  c.height = h;
+  c.width = Math.ceil(w * RES);
+  c.height = Math.ceil(h * RES);
   return c;
+}
+
+/** Atmospheric perspective: lighten silhouettes toward the horizon and add a sun-side rim. */
+function shadeLayer(ctx: CanvasRenderingContext2D, top: string, bottom: string) {
+  ctx.save();
+  ctx.globalCompositeOperation = "source-atop";
+  const g = ctx.createLinearGradient(0, 0, 0, LH);
+  g.addColorStop(0, top);
+  g.addColorStop(1, bottom);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, LW, LH);
+  ctx.restore();
 }
 
 /** Draw `fn` at x, and wrapped copies so the layer tiles seamlessly. */
@@ -257,6 +280,39 @@ function drawMid(ctx: CanvasRenderingContext2D, w: WorldDef) {
           }
         }
       }
+      // sun-side rim and shaded side give the skyline volume
+      if (w.weather !== "sky") {
+        ctx.fillStyle = "rgba(255,255,255,0.10)";
+        ctx.fillRect(X, top, 6, bh);
+        ctx.fillStyle = "rgba(0,0,0,0.12)";
+        ctx.fillRect(X + bw - 22, top, 14, bh);
+        // skyline props: water towers, antennas, vents (scenery only)
+        const prop = hash01(i * 7.3 + w.id * 2);
+        ctx.fillStyle = w.mid;
+        if ((w.weather === "sun" || w.weather === "rain") && prop > 0.55 && bw > 120) {
+          const tx = X + bw * 0.55;
+          ctx.fillRect(tx + 4, top - 52, 3, 30);
+          ctx.fillRect(tx + 27, top - 52, 3, 30);
+          ctx.beginPath();
+          ctx.roundRect(tx, top - 80, 34, 34, 4);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(tx - 3, top - 80);
+          ctx.lineTo(tx + 17, top - 96);
+          ctx.lineTo(tx + 37, top - 80);
+          ctx.fill();
+          ctx.fillStyle = "rgba(255,255,255,0.10)";
+          ctx.fillRect(tx, top - 80, 5, 34);
+        } else if (prop > 0.3 && w.weather !== "sand") {
+          ctx.fillRect(X + bw * 0.3, top - 46, 3, 46);
+          ctx.fillRect(X + bw * 0.3 - 8, top - 34, 19, 2);
+          ctx.fillRect(X + bw * 0.62, top - 16, 18, 16);
+          if (w.weather === "neon") {
+            ctx.fillStyle = "rgba(255,80,80,0.9)";
+            ctx.fillRect(X + bw * 0.3 - 1, top - 50, 5, 5);
+          }
+        }
+      }
       // windows
       for (let wy = top + 40; wy < base - 20; wy += 34)
         for (let wx = 16; wx < bw - 26; wx += 26) {
@@ -383,8 +439,14 @@ function drawNear(ctx: CanvasRenderingContext2D, w: WorldDef) {
 }
 
 export function getLayers(worldId: number): Layers {
-  const c = cache.get(worldId);
+  const key = `${worldId}:${RES}`;
+  const c = cache.get(key);
   if (c) return c;
+  // keep memory bounded: only the most recent couple of worlds stay cached
+  if (cache.size >= 2) {
+    const first = cache.keys().next().value;
+    if (first !== undefined) cache.delete(first);
+  }
   const w = WORLDS[worldId] ?? (WORLDS[0] as WorldDef);
   const far = makeCanvas(LW, LH);
   const mid = makeCanvas(LW, LH);
@@ -392,22 +454,97 @@ export function getLayers(worldId: number): Layers {
   const fc = far.getContext("2d");
   const mc = mid.getContext("2d");
   const nc = near.getContext("2d");
-  if (fc) drawFar(fc, w);
-  if (mc) drawMid(mc, w);
-  if (nc) drawNear(nc, w);
+  const night = w.weather === "neon" || w.weather === "snow";
+  if (fc) {
+    fc.scale(RES, RES);
+    drawFar(fc, w);
+    shadeLayer(fc, night ? "rgba(255,255,255,0)" : "rgba(255,255,255,0.04)", night ? "rgba(140,170,255,0.16)" : "rgba(255,255,255,0.26)");
+  }
+  if (mc) {
+    mc.scale(RES, RES);
+    drawMid(mc, w);
+    shadeLayer(mc, "rgba(255,255,255,0.06)", night ? "rgba(120,150,255,0.12)" : "rgba(255,255,255,0.16)");
+  }
+  if (nc) {
+    nc.scale(RES, RES);
+    drawNear(nc, w);
+    shadeLayer(nc, "rgba(255,255,255,0.05)", "rgba(0,0,0,0.06)");
+  }
   const layers = { far, mid, near };
-  cache.set(worldId, layers);
+  cache.set(key, layers);
   return layers;
 }
 
 function drawLayer(ctx: CanvasRenderingContext2D, img: HTMLCanvasElement, camX: number, f: number, y: number, fill: string) {
   const off = (((camX * f) % LW) + LW) % LW;
-  ctx.drawImage(img, -off, y);
-  if (LW - off < VIEW_W) ctx.drawImage(img, LW - off, y);
+  ctx.drawImage(img, -off, y, LW, LH);
+  if (LW - off < VIEW_W) ctx.drawImage(img, LW - off, y, LW, LH);
   if (y + LH < VIEW_H) {
     ctx.fillStyle = fill;
     ctx.fillRect(0, y + LH - 1, VIEW_W, VIEW_H - (y + LH) + 1);
   }
+}
+
+const CLOUD_W = 260;
+const CLOUD_H = 120;
+const cloudCache = new Map<string, HTMLCanvasElement>();
+
+/** A puffy cartoon cloud: merged circles, flat-ish base, lit top and a cool shaded underside. */
+function getCloud(w: WorldDef, variant: number): HTMLCanvasElement {
+  const key = `${w.id}:${variant}`;
+  const hit = cloudCache.get(key);
+  if (hit) return hit;
+  const c = makeCanvas(CLOUD_W, CLOUD_H);
+  const g = c.getContext("2d");
+  if (g) {
+    g.scale(RES, RES);
+    const rain = w.weather === "rain";
+    const sand = w.weather === "sand";
+    const base = rain ? "#8c9cab" : sand ? "#fff1dc" : "#ffffff";
+    const shade = rain ? "#64758a" : sand ? "#f0c9a0" : w.weather === "snow" ? "#c9d3f2" : "#cfe0f5";
+    const puffs: [number, number, number][] = [];
+    const cx = CLOUD_W / 2;
+    const baseY = CLOUD_H * 0.78;
+    const count = 4 + (variant % 3);
+    for (let k = 0; k < count; k++) {
+      const u = k / (count - 1);
+      const px = cx + (u - 0.5) * (CLOUD_W * 0.62);
+      const bump = Math.sin(u * Math.PI);
+      const r = 20 + bump * (24 + hash01(variant * 11 + k) * 14);
+      puffs.push([px, baseY - r * 0.75 - bump * 6, r]);
+    }
+    const shapePath = () => {
+      g.beginPath();
+      for (const [px, py, r] of puffs) {
+        g.moveTo(px + r, py);
+        g.arc(px, py, r, 0, Math.PI * 2);
+      }
+      g.moveTo(cx - CLOUD_W * 0.36, baseY);
+      g.roundRect(cx - CLOUD_W * 0.36, baseY - 26, CLOUD_W * 0.72, 26, 13);
+    };
+    // body
+    shapePath();
+    g.fillStyle = base;
+    g.fill();
+    // underside shading + top highlight, clipped to the cloud
+    g.save();
+    shapePath();
+    g.clip();
+    const grad = g.createLinearGradient(0, baseY - 70, 0, baseY);
+    grad.addColorStop(0, "rgba(255,255,255,0)");
+    grad.addColorStop(1, shade);
+    g.fillStyle = grad;
+    g.fillRect(0, baseY - 70, CLOUD_W, 72);
+    g.fillStyle = rain ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.7)";
+    for (const [px, py, r] of puffs) {
+      g.beginPath();
+      g.arc(px - r * 0.25, py - r * 0.3, r * 0.55, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.restore();
+  }
+  cloudCache.set(key, c);
+  return c;
 }
 
 const skyCache = new Map<string, CanvasGradient>();
@@ -456,11 +593,35 @@ export function drawBackground(
   glow.addColorStop(1, "rgba(255,250,220,0)");
   ctx.fillStyle = glow;
   ctx.fillRect(sunX - sunR * 3.4, sunY - sunR * 3.4, sunR * 6.8, sunR * 6.8);
+  // horizon light band
+  const hb = ctx.createLinearGradient(0, VIEW_H * 0.45, 0, VIEW_H);
+  hb.addColorStop(0, "rgba(255,255,255,0)");
+  hb.addColorStop(1, w.weather === "neon" ? "rgba(255,80,200,0.16)" : "rgba(255,248,230,0.22)");
+  ctx.fillStyle = hb;
+  ctx.fillRect(0, VIEW_H * 0.45, VIEW_W, VIEW_H * 0.55);
   if (w.weather !== "rain") {
+    if (high) {
+      const halo = ctx.createRadialGradient(sunX, sunY, sunR * 0.9, sunX, sunY, sunR * 1.35);
+      halo.addColorStop(0, "rgba(255,255,255,0.35)");
+      halo.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, sunR * 1.35, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.fillStyle = w.sun;
     ctx.beginPath();
     ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
     ctx.fill();
+    if (w.weather !== "neon") {
+      const inner = ctx.createRadialGradient(sunX - sunR * 0.3, sunY - sunR * 0.3, 0, sunX, sunY, sunR);
+      inner.addColorStop(0, "rgba(255,255,255,0.55)");
+      inner.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = inner;
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
+      ctx.fill();
+    }
     if (w.weather === "neon") {
       ctx.fillStyle = w.sky[1];
       ctx.beginPath();
@@ -486,22 +647,23 @@ export function drawBackground(
     ctx.restore();
   }
 
-  // Drifting clouds
+  // Drifting clouds: two depth bands of soft, shaded puffs
   if (w.weather !== "neon") {
-    const n = high ? 7 : 4;
+    const n = high ? 9 : 5;
     for (let i = 0; i < n; i++) {
-      const speed = 8 + hash01(i * 2.1) * 14;
-      const span = VIEW_W + 400;
-      const x = ((((hash01(i * 5.3) * span - camX * 0.05 - t * speed) % span) + span) % span) - 200;
-      const y = 60 + hash01(i * 7.9) * 200 - cy * 0.05;
-      const s = 0.7 + hash01(i * 1.3) * 0.8;
-      ctx.fillStyle = w.weather === "rain" ? "rgba(90,110,125,0.55)" : "rgba(255,255,255,0.75)";
-      ctx.beginPath();
-      ctx.ellipse(x, y, 70 * s, 22 * s, 0, 0, Math.PI * 2);
-      ctx.ellipse(x + 40 * s, y - 12 * s, 44 * s, 24 * s, 0, 0, Math.PI * 2);
-      ctx.ellipse(x - 36 * s, y - 6 * s, 36 * s, 18 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
+      const farBand = i % 3 === 0;
+      const speed = (farBand ? 4 : 8) + hash01(i * 2.1) * 12;
+      const span = VIEW_W + 520;
+      const x = ((((hash01(i * 5.3) * span - camX * (farBand ? 0.025 : 0.06) - t * speed) % span) + span) % span) - 260;
+      const y = (farBand ? 70 : 50) + hash01(i * 7.9) * (farBand ? 120 : 220) - cy * (farBand ? 0.03 : 0.06);
+      const sc = (farBand ? 0.55 : 0.8) + hash01(i * 1.3) * (farBand ? 0.35 : 0.7);
+      const img = getCloud(w, i % 4);
+      const cw = CLOUD_W * sc;
+      const ch = CLOUD_H * sc;
+      ctx.globalAlpha = farBand ? 0.55 : w.weather === "rain" ? 0.85 : 0.95;
+      ctx.drawImage(img, x - cw / 2, y - ch * 0.62, cw, ch);
     }
+    ctx.globalAlpha = 1;
   }
 
   // Sunny birds
