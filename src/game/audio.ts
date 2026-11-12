@@ -52,6 +52,13 @@ export class AudioEngine {
   private lastPlayed = new Map<string, number>();
   private userSuspended = false;
   private duck = 1;
+  private platformMuted = false;
+
+  /** Muted by the hosting platform (ad break or its own mute switch). */
+  setPlatformMute(m: boolean) {
+    this.platformMuted = m;
+    if (this.master && this.ctx) this.master.gain.setTargetAtTime(m ? 0 : 0.9, this.ctx.currentTime, 0.03);
+  }
 
   /** Call from a user gesture handler. Safe to call repeatedly. */
   unlock() {
@@ -68,7 +75,7 @@ export class AudioEngine {
         comp.threshold.value = -14;
         comp.ratio.value = 4;
         this.master = ctx.createGain();
-        this.master.gain.value = 0.9;
+        this.master.gain.value = this.platformMuted ? 0 : 0.9;
         this.musicGain = ctx.createGain();
         this.musicGain.gain.value = this.musicOn ? 0.55 : 0;
         this.sfxGain = ctx.createGain();

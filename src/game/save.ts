@@ -1,4 +1,5 @@
 /**
+import { platformStorage } from "./platform";
  * Versioned save system. Storage access is always wrapped in try/catch and falls back
  * to in-memory state, and corrupted data resets field-by-field to safe defaults.
  */
@@ -121,6 +122,36 @@ export interface KeyValueStorage {
 /** localStorage when available, otherwise (or when it throws) an in-memory map. */
 export function createSafeStorage(): KeyValueStorage {
   const memory = new Map<string, string>();
+  // On CrazyGames, saves go through their data module (synced to the player's account).
+  const cg = platformStorage();
+  if (cg) {
+    return {
+      get(key) {
+        try {
+          const v = cg.getItem(key);
+          if (v !== null && v !== undefined) return v;
+        } catch {
+          /* fall through */
+        }
+        // first launch on the platform: pick up an existing local save
+        try {
+          const v = typeof window !== "undefined" ? window.localStorage.getItem(key) : null;
+          if (v !== null) return v;
+        } catch {
+          /* blocked */
+        }
+        return memory.get(key) ?? null;
+      },
+      set(key, value) {
+        memory.set(key, value);
+        try {
+          cg.setItem(key, value);
+        } catch {
+          /* keep the in-memory copy */
+        }
+      },
+    };
+  }
   const ls = (): Storage | null => {
     try {
       if (typeof window === "undefined") return null;
