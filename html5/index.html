@@ -6,8 +6,34 @@
     <meta name="theme-color" content="#1c1530" />
     <title>Whisker Rooftops — Cat Parkour Runner</title>
     <meta name="description" content="Leap, slide and wall-run a cat across 30 rooftop levels in six worlds." />
+    <!-- Official CrazyGames SDK v3. The game runs normally if it can't load (offline / other hosts). -->
+    <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+    <style>
+      html, body { margin: 0; height: 100%; background: #1c1530; overflow: hidden; }
+      #splash {
+        position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+        background: radial-gradient(ellipse at 50% 35%, #ffb36b 0%, #ff7a59 30%, #6b3fa0 75%, #1c1530 100%);
+        font-family: Fredoka, system-ui, sans-serif; color: #fff; transition: opacity .45s ease;
+      }
+      #splash.hide { opacity: 0; pointer-events: none; }
+      #splash .cat { width: 92px; height: 72px; animation: bob 1s ease-in-out infinite; }
+      #splash h1 { margin: 0; font-size: clamp(30px, 7vmin, 64px); font-weight: 700; letter-spacing: .5px; color: #ffd166; -webkit-text-stroke: 3px #241a3d; paint-order: stroke fill; text-shadow: 0 5px 0 #241a3d; }
+      #splash .bar { width: min(320px, 60vw); height: 16px; border: 3px solid #241a3d; border-radius: 999px; background: rgba(36,26,61,.45); overflow: hidden; }
+      #splash .fill { height: 100%; width: 8%; border-radius: 999px; background: linear-gradient(90deg, #ffd166, #ff8a3d); transition: width .3s ease; }
+      @keyframes bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+    </style>
   </head>
   <body>
+    <div id="splash" aria-label="Loading">
+      <svg class="cat" viewBox="0 0 120 90" aria-hidden="true">
+        <path d="M14 84 L18 10 L46 34 Q60 30 74 34 L102 10 L106 84 Q60 96 14 84 Z" fill="#ff8a3d" stroke="#241a3d" stroke-width="6" stroke-linejoin="round" />
+        <circle cx="44" cy="56" r="7" fill="#241a3d" /><circle cx="76" cy="56" r="7" fill="#241a3d" />
+        <circle cx="46" cy="54" r="2.5" fill="#fff" /><circle cx="78" cy="54" r="2.5" fill="#fff" />
+        <path d="M56 68 L64 68 L60 73 Z" fill="#ff5c8a" />
+      </svg>
+      <h1>Whisker Rooftops</h1>
+      <div class="bar"><div class="fill" id="splash-fill"></div></div>
+    </div>
     <div id="root"></div>
     <script type="module" src="./main.tsx"></script>
   </body>
