@@ -5,6 +5,7 @@ import { LEVEL_COUNT } from "@/game/levels";
 import { claimDaily, dailyStatus, getSaveStore, type Settings } from "@/game/save";
 import { ACCESSORIES, SKINS, newlyEarnedSkins, type AccSlot } from "@/game/skins";
 import { useSave } from "@/game/useSave";
+import { onCrazyGames, platform } from "@/game/platform";
 import { devValidateLevels } from "@/game/validate";
 import { CompleteScreen, DailyToast, GameOverScreen, LevelSelect, MainMenu, PauseButton, PauseMenu, SettingsScreen, Shop } from "./screens";
 
@@ -75,7 +76,7 @@ export function WhiskerGame() {
     const onOrient = () => setPortrait(window.innerHeight > window.innerWidth * 1.1 && window.matchMedia("(pointer: coarse)").matches);
     onOrient();
     window.addEventListener("resize", onOrient);
-    setFs(fullscreenSupported());
+    setFs(fullscreenSupported() && !onCrazyGames());
     setNow(new Date());
     return () => {
       document.removeEventListener("gesturestart", prevent);
@@ -105,9 +106,12 @@ export function WhiskerGame() {
 
   const startLevel = (id: number) => {
     click();
+    const fromResult = run === "complete" || run === "gameover";
     setComplete(null);
     setOver(null);
-    appRef.current?.startLevel(id);
+    // CrazyGames midgame break between attempts (platform caps frequency; no-op elsewhere)
+    if (fromResult && onCrazyGames()) void platform.midgameAd().then(() => appRef.current?.startLevel(id));
+    else appRef.current?.startLevel(id);
   };
 
   const toMenu = () => {
