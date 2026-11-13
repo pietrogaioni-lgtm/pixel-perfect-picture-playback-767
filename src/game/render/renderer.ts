@@ -297,6 +297,15 @@ export class Renderer {
     ctx.stroke();
   }
 
+  /** Full-screen dark veil used for scene transitions. */
+  fadeOverlay(a: number) {
+    const ctx = this.ctx;
+    this.begin();
+    const e = a * a * (3 - 2 * a);
+    ctx.fillStyle = `rgba(20,14,40,${e})`;
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  }
+
   /** Menu background: endless rooftop run with the chosen cat. */
   drawAttract(t: number, worldId: number, look: Look, high: boolean) {
     const ctx = this.ctx;

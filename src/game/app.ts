@@ -8,6 +8,7 @@ import { Renderer, type Look } from "./render/renderer";
 import { AudioEngine, type UiSfx } from "./audio";
 import { getSaveStore, type SaveData, type Settings } from "./save";
 import { newlyEarnedSkins } from "./skins";
+import { platform } from "./platform";
 
 export type RunScreen = "playing" | "countdown" | "paused" | "gameover" | "complete" | "menu";
 
@@ -65,6 +66,8 @@ export class GameApp {
   private banked = false;
   private ro: ResizeObserver | null = null;
   private destroyed = false;
+  private fade = 0;
+  private unMute: (() => void) | null = null;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -99,6 +102,7 @@ export class GameApp {
       this.ro = new ResizeObserver(() => this.onResize());
       this.ro.observe(this.container);
     }
+    this.unMute = platform.onMuteChange((m) => this.audio.setPlatformMute(m));
     this.onResize();
     this.loop.start();
   }
@@ -113,6 +117,8 @@ export class GameApp {
     document.removeEventListener("visibilitychange", this.onVisibility);
     window.removeEventListener("blur", this.onBlur);
     this.ro?.disconnect();
+    this.unMute?.();
+    platform.setGameplay(false);
     this.audio.destroy();
     this.run = null;
     if (activeApp === this) activeApp = null;
@@ -157,6 +163,7 @@ export class GameApp {
     this.setMode("countdown");
     this.countdown = 3;
     this.lastCount = 4;
+    this.fade = 1;
     this.loop.resetClock();
     getSaveStore().update((s) => ({ ...s, stats: { ...s.stats, runs: s.stats.runs + 1 } }));
     emitGameEvent({ type: "game_started", level: def.id });
@@ -195,6 +202,7 @@ export class GameApp {
     this.input.reset();
     this.audio.setDuck(1);
     this.audio.playMusic(this.menuWorld);
+    this.fade = 1;
     this.setMode("menu");
   }
 
@@ -224,6 +232,7 @@ export class GameApp {
   private setMode(m: RunScreen) {
     this.mode = m;
     this.input.enabled = m === "playing" || m === "countdown";
+    platform.setGameplay(m === "playing" || m === "countdown");
     this.cb.onScreen(m);
   }
 
@@ -307,6 +316,7 @@ export class GameApp {
     this.audio.setDuck(0.5);
     this.setMode("complete");
     emitGameEvent({ type: "level_complete", level: id, stars: earned.filter(Boolean).length, fish: run.fishCount });
+    platform.happytime();
     this.cb.onComplete({
       levelId: id,
       stars: after?.stars ?? earned,
@@ -357,6 +367,15 @@ export class GameApp {
   }
 
   private draw(_alpha: number, _fdt: number) {
+    this.drawScene(_alpha);
+    // quick fade-in after entering a level or returning to the menu (visual only)
+    if (this.fade > 0) {
+      this.renderer.fadeOverlay(this.fade);
+      this.fade = Math.max(0, this.fade - Math.min(0.1, _fdt || 1 / 60) * 3);
+    }
+  }
+
+  private drawScene(_alpha: number) {
     const high = this.settings.quality === "high";
     if (this.mode === "menu" || !this.run) {
       this.renderer.drawAttract(this.menuTime, this.menuWorld, this.look, high);
