@@ -1,9 +1,9 @@
 /**
-import { platformStorage } from "./platform";
  * Versioned save system. Storage access is always wrapped in try/catch and falls back
  * to in-memory state, and corrupted data resets field-by-field to safe defaults.
  */
 import { DAILY_REWARD } from "./constants";
+import { platformStorage } from "./platform";
 
 export const SAVE_KEY = "whisker-rooftops-save";
 export const SAVE_VERSION = 1;
